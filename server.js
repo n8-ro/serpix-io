@@ -5,19 +5,19 @@ const { WebSocketServer } = require('ws');
 
 // ─── GAME CONSTANTS ─────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-const TICK_RATE = 60;
-const SEND_RATE = 20;
-const WORLD_SIZE = 8000;
-const FOOD_COUNT = 2000;
-const BOT_COUNT = 50;
+const TICK_RATE = 30;          // 30Hz tick (halved — much lighter on CPU)
+const SEND_RATE = 15;          // 15Hz network updates
+const WORLD_SIZE = 6000;       // Smaller world = less work
+const FOOD_COUNT = 800;        // Less food to iterate
+const BOT_COUNT = 25;          // Half the bots
 const INITIAL_SNAKE_LENGTH = 28;
 const MAGNET_DISTANCE = 150;
 const MAX_RADIUS = 50;
-const MAX_SEGMENTS_SEND = 150;
-const VIEWPORT_BUFFER = 2000;
+const MAX_SEGMENTS_SEND = 100; // Send fewer segments
+const VIEWPORT_BUFFER = 1500;
 const POWER_BOOST_INTERVAL = 120000;
 const POWER_BOOST_DURATION = 5000;
-const MAX_BOTS_AI_PER_FRAME = 25;
+const MAX_BOTS_AI_PER_FRAME = 10; // Fewer bots do complex AI per frame
 
 const COLORS = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#ffffff'];
 const SNAKE_PATTERNS = ['solid','striped','spotted','gradient'];
@@ -66,8 +66,8 @@ class Snake {
         this.segments = [];
         this.angle = Math.random() * Math.PI * 2;
         this.targetAngle = this.angle;
-        this.baseSpeed = 1.5;
-        this.speed = 1.5;
+        this.baseSpeed = 3;    // Doubled to compensate for 30Hz tick
+        this.speed = 3;
         this.baseRadius = 14;
         this.radius = 14;
         this.score = 0;
