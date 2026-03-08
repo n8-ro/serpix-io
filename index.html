@@ -1,0 +1,1203 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Serpix.io</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #0f172a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-element {
+            position: absolute;
+            pointer-events: auto;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #leaderboard {
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 12px;
+            backdrop-filter: blur(4px);
+            min-width: 180px;
+        }
+
+        #score-display {
+            bottom: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #rank-display {
+            top: 20px;
+            left: 20px;
+            font-size: 20px;
+            font-weight: bold;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(4px);
+        }
+
+        #minimap-container {
+            bottom: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 41, 59, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            pointer-events: auto;
+            min-width: 300px;
+            border: 2px solid #3b82f6;
+        }
+
+        input {
+            background: #334155;
+            border: 1px solid #475569;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            width: 100%;
+            outline: none;
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #2563eb;
+            transform: scale(1.02);
+        }
+        
+        .color-option {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .color-option:hover {
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .color-option.active {
+            border-color: white;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+        }
+        
+        #leaderboard-page {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 41, 59, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            pointer-events: auto;
+            min-width: 400px;
+            max-width: 90vw;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 2px solid #3b82f6;
+        }
+        
+        .leaderboard-entry {
+            background: rgba(51, 65, 85, 0.5);
+            padding: 12px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+        
+        .leaderboard-entry:hover {
+            background: rgba(51, 65, 85, 0.8);
+            transform: translateX(5px);
+        }
+        
+        .rank-badge {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        
+        .rank-1 { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: #78350f; }
+        .rank-2 { background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%); color: #1e293b; }
+        .rank-3 { background: linear-gradient(135deg, #fdba74 0%, #f97316 100%); color: #7c2d12; }
+        .rank-other { background: rgba(100, 116, 139, 0.5); color: #e2e8f0; }
+        
+        #ad-reward-modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 41, 59, 0.98);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            pointer-events: auto;
+            max-width: 600px;
+            width: 90vw;
+            border: 2px solid #10b981;
+            z-index: 1000;
+        }
+        
+        #ad-video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            margin: 10px 0;
+        }
+        
+        #ad-video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .ad-reward-badge {
+            background: linear-gradient(135deg, #10b981, #059669);
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 10px 0;
+        }
+
+        #connection-status {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            z-index: 999;
+            pointer-events: none;
+            transition: all 0.3s;
+        }
+        .conn-connecting { background: rgba(245,158,11,0.9); color: #fff; }
+        .conn-connected { background: rgba(16,185,129,0.9); color: #fff; opacity: 0; }
+        .conn-disconnected { background: rgba(239,68,68,0.9); color: #fff; }
+
+        #player-count {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.4);
+            padding: 4px 14px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #94a3b8;
+            z-index: 999;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-overlay">
+        <!-- Ad Reward Modal -->
+        <div id="ad-reward-modal" class="hidden">
+            <h1 class="text-2xl font-bold mb-4 text-white text-center">🎁 Bonus Starter Pack!</h1>
+            <p class="text-slate-300 text-center mb-3">Watch this short video to start with <span class="ad-reward-badge">500 POINTS</span></p>
+            
+            <div id="ad-video-container">
+                <video 
+                    id="ad-video" 
+                    width="560" 
+                    height="315" 
+                    disablePictureInPicture
+                    style="border-radius: 8px; background: #000; pointer-events: none;">
+                    <source src="The LEGO Mandalorian.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+            
+            <p class="text-slate-400 text-sm text-center mb-4">⏱️ <span id="ad-timer">Please watch the entire video...</span></p>
+            
+            <div style="display: flex; justify-content: center;">
+                <button id="claimRewardBtn" class="hidden" style="background: #10b981; min-width: 250px;">Claim 500 Points & Play!</button>
+            </div>
+        </div>
+        
+        <!-- Main Menu -->
+        <div id="menu">
+            <h1 class="text-3xl font-bold mb-6 text-white uppercase tracking-widest">Serpix.io</h1>
+            <input type="text" id="playerName" placeholder="Enter Nickname" maxlength="12">
+            
+            <div style="margin: 15px 0;">
+                <label style="color: #94a3b8; font-size: 14px; display: block; margin-bottom: 8px;">Snake Color</label>
+                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                    <div class="color-option" data-color="#ef4444" style="background: #ef4444;"></div>
+                    <div class="color-option" data-color="#f59e0b" style="background: #f59e0b;"></div>
+                    <div class="color-option active" data-color="#10b981" style="background: #10b981;"></div>
+                    <div class="color-option" data-color="#3b82f6" style="background: #3b82f6;"></div>
+                    <div class="color-option" data-color="#8b5cf6" style="background: #8b5cf6;"></div>
+                    <div class="color-option" data-color="#ec4899" style="background: #ec4899;"></div>
+                    <div class="color-option" data-color="#ffffff" style="background: #ffffff;"></div>
+                </div>
+            </div>
+            
+            <div style="margin: 15px 0;">
+                <label style="color: #94a3b8; font-size: 14px; display: block; margin-bottom: 8px;">Snake Pattern</label>
+                <select id="patternSelect" style="background: #334155; border: 1px solid #475569; color: white; padding: 8px 12px; border-radius: 6px; width: 100%; outline: none;">
+                    <option value="solid">Solid</option>
+                    <option value="striped">Striped</option>
+                    <option value="spotted">Spotted</option>
+                    <option value="gradient">Gradient</option>
+                </select>
+            </div>
+            
+            <button id="startBtn">ENTER REALM</button>
+            <button id="startBigBtn" style="margin-top: 10px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); font-weight: bold; text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);">🎁 START BIG (500 Points)</button>
+            <button id="viewLeaderboardBtn" style="margin-top: 10px; background: #8b5cf6;">VIEW GLOBAL LEADERBOARD</button>
+            <p class="mt-4 text-slate-400 text-sm">
+                <span class="hidden md:inline">Hold Mouse to Boost</span>
+                <span class="md:hidden">Swipe to Move • Double Tap to Boost</span>
+                <br>Avoid Heads • Collect Food
+            </p>
+        </div>
+        
+        <!-- Global Leaderboard Page -->
+        <div id="leaderboard-page" class="hidden">
+            <h1 class="text-3xl font-bold mb-6 text-white uppercase tracking-widest text-center">🏆 Global Leaderboard</h1>
+            <div id="global-leaderboard-list" class="mb-4">
+                <div class="text-center text-slate-400 py-8">Loading...</div>
+            </div>
+            <button id="backToMenuBtn" style="width: 100%; background: #64748b;">BACK TO MENU</button>
+        </div>
+
+        <!-- In-Game HUD -->
+        <div id="rank-display" class="hud-element hidden">
+            Rank: <span id="current-rank">1</span> of <span id="total-snakes">30</span>
+        </div>
+
+        <div id="leaderboard" class="hud-element hidden">
+            <h3 class="font-bold border-bottom border-slate-500 mb-2">TOP SLITHERERS</h3>
+            <div id="leaderboard-list" class="text-sm space-y-1"></div>
+        </div>
+
+        <div id="score-display" class="hud-element hidden">
+            Mass: <span id="current-score">0</span>
+            <br>
+            <span id="power-boost-timer" style="font-size: 14px; color: #fca5a5;">Next Rampage: <span id="timer-value">60</span>s</span>
+        </div>
+
+        <div id="minimap-container" class="hud-element hidden">
+            <canvas id="minimapCanvas" width="150" height="150"></canvas>
+        </div>
+    </div>
+</div>
+
+<div id="connection-status" class="conn-connecting">Connecting...</div>
+<div id="player-count" class="hidden"></div>
+
+<script>
+    // ─── FIREBASE ───────────────────────────────────────────
+    const firebaseConfig = {
+        apiKey: "AIzaSyBfcjdGZVYSmE0PoyVZYXYVVIbudN5VFVE",
+        authDomain: "slither-realm.firebaseapp.com",
+        databaseURL: "https://slither-realm-default-rtdb.firebaseio.com",
+        projectId: "slither-realm",
+        storageBucket: "slither-realm.firebasestorage.app",
+        messagingSenderId: "705370655266",
+        appId: "1:705370655266:web:86c78f3aaf70492562987b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // ─── DOM REFS ───────────────────────────────────────────
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const minimapCanvas = document.getElementById('minimapCanvas');
+    const mctx = minimapCanvas.getContext('2d');
+    const menu = document.getElementById('menu');
+    const startBtn = document.getElementById('startBtn');
+    const playerNameInput = document.getElementById('playerName');
+    const leaderboardEl = document.getElementById('leaderboard');
+    const leaderboardList = document.getElementById('leaderboard-list');
+    const scoreDisplay = document.getElementById('score-display');
+    const scoreVal = document.getElementById('current-score');
+    const minimapContainer = document.getElementById('minimap-container');
+    const rankDisplay = document.getElementById('rank-display');
+    const currentRankEl = document.getElementById('current-rank');
+    const totalSnakesEl = document.getElementById('total-snakes');
+    const leaderboardPage = document.getElementById('leaderboard-page');
+    const globalLeaderboardList = document.getElementById('global-leaderboard-list');
+    const viewLeaderboardBtn = document.getElementById('viewLeaderboardBtn');
+    const backToMenuBtn = document.getElementById('backToMenuBtn');
+    const adRewardModal = document.getElementById('ad-reward-modal');
+    const claimRewardBtn = document.getElementById('claimRewardBtn');
+    const adTimer = document.getElementById('ad-timer');
+    const startBigBtn = document.getElementById('startBigBtn');
+    const adVideo = document.getElementById('ad-video');
+    const connStatus = document.getElementById('connection-status');
+    const playerCountEl = document.getElementById('player-count');
+
+    // ─── CONSTANTS ──────────────────────────────────────────
+    const WORLD_SIZE = 8000;
+    const COLORS = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#ffffff'];
+    const MAX_RENDERED_SEGMENTS = 150;
+    const INTERP_DURATION = 50; // ms between server updates (20 Hz)
+
+    // ─── GAME STATE ─────────────────────────────────────────
+    let isPlaying = false;
+    let camera = { x: 0, y: 0 };
+    let mouse = { x: 0, y: 0, down: false };
+    let windowWidth, windowHeight;
+    let selectedColor = '#10b981';
+    let selectedPattern = 'solid';
+    let startingBonus = 0;
+    let adWatched = false;
+    let mySnakeId = -1;
+    let lastTapTime = 0;
+    const DOUBLE_TAP_DELAY = 300;
+
+    // Server state (double-buffered for interpolation)
+    let prevState = null;
+    let currState = null;
+    let stateTimestamp = 0;
+    let serverLeaderboard = [];
+    let serverRank = 1;
+    let serverTotalCount = 0;
+    let serverTimeToBoost = 60;
+    let minimapData = [];
+    let minimapDeathLocs = [];
+
+    // ─── WEBSOCKET ──────────────────────────────────────────
+    let ws = null;
+    let wsConnected = false;
+    let reconnectTimer = null;
+    const INPUT_RATE = 30; // Send input 30 times per second
+    let lastInputSend = 0;
+
+    function getWsUrl() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${proto}//${location.host}`;
+    }
+
+    function connectWebSocket() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+        connStatus.className = 'conn-connecting';
+        connStatus.textContent = 'Connecting...';
+        connStatus.style.opacity = '1';
+
+        ws = new WebSocket(getWsUrl());
+
+        ws.onopen = () => {
+            wsConnected = true;
+            connStatus.className = 'conn-connected';
+            connStatus.textContent = 'Connected';
+            setTimeout(() => { connStatus.style.opacity = '0'; }, 1500);
+
+            // Send viewport size
+            ws.send(JSON.stringify({ t: 'viewport', w: windowWidth, h: windowHeight }));
+        };
+
+        ws.onmessage = (event) => {
+            let msg;
+            try { msg = JSON.parse(event.data); } catch { return; }
+            handleServerMessage(msg);
+        };
+
+        ws.onclose = () => {
+            wsConnected = false;
+            if (isPlaying) {
+                connStatus.className = 'conn-disconnected';
+                connStatus.textContent = 'Disconnected - Reconnecting...';
+                connStatus.style.opacity = '1';
+            }
+            // Auto-reconnect
+            if (!reconnectTimer) {
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    connectWebSocket();
+                }, 1500);
+            }
+        };
+
+        ws.onerror = () => {};
+    }
+
+    function handleServerMessage(msg) {
+        switch (msg.t) {
+            case 'welcome':
+                mySnakeId = msg.id;
+                break;
+            case 's': // State update
+                prevState = currState;
+                currState = msg;
+                stateTimestamp = performance.now();
+                // Update HUD data
+                serverLeaderboard = msg.lb || [];
+                serverRank = msg.rk || 1;
+                serverTotalCount = msg.tc || 0;
+                serverTimeToBoost = msg.tb || 0;
+                minimapData = msg.mm || [];
+                minimapDeathLocs = msg.dl || [];
+                break;
+            case 'dead':
+                isPlaying = false;
+                endGame(msg.sc || 0);
+                break;
+            case 'boost':
+                showPowerBoostNotification(msg.n);
+                break;
+        }
+    }
+
+    function sendInput() {
+        if (!ws || ws.readyState !== WebSocket.OPEN || !isPlaying) return;
+        const now = performance.now();
+        if (now - lastInputSend < 1000 / INPUT_RATE) return;
+        lastInputSend = now;
+
+        const angle = Math.atan2(mouse.y - windowHeight / 2, mouse.x - windowWidth / 2);
+        ws.send(JSON.stringify({ t: 'input', a: Math.round(angle * 1000) / 1000, b: mouse.down ? 1 : 0 }));
+    }
+
+    // ─── RENDERING HELPERS ──────────────────────────────────
+    function lightenColor(color, percent) {
+        const num = parseInt(color.replace("#",""), 16);
+        const amt = Math.round(2.55 * percent);
+        const R = Math.min(255, (num >> 16) + amt);
+        const G = Math.min(255, (num >> 8 & 0x00FF) + amt);
+        const B = Math.min(255, (num & 0x0000FF) + amt);
+        return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+    }
+
+    function darkenColor(color, percent) {
+        const num = parseInt(color.replace("#",""), 16);
+        const amt = Math.round(2.55 * percent);
+        const R = Math.max(0, (num >> 16) - amt);
+        const G = Math.max(0, (num >> 8 & 0x00FF) - amt);
+        const B = Math.max(0, (num & 0x0000FF) - amt);
+        return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function getInterpolatedSegments(prevSn, currSn, t) {
+        // Decode flat arrays to segment arrays
+        const currSegs = [];
+        for (let i = 0; i < currSn.sg.length; i += 2) {
+            currSegs.push({ x: currSn.sg[i], y: currSn.sg[i + 1] });
+        }
+
+        if (!prevSn) return currSegs;
+
+        const prevSegs = [];
+        for (let i = 0; i < prevSn.sg.length; i += 2) {
+            prevSegs.push({ x: prevSn.sg[i], y: prevSn.sg[i + 1] });
+        }
+
+        const result = [];
+        const len = Math.min(currSegs.length, prevSegs.length);
+        for (let i = 0; i < len; i++) {
+            result.push({
+                x: lerp(prevSegs[i].x, currSegs[i].x, t),
+                y: lerp(prevSegs[i].y, currSegs[i].y, t)
+            });
+        }
+        // Extra segments from current state
+        for (let i = len; i < currSegs.length; i++) {
+            result.push(currSegs[i]);
+        }
+        return result;
+    }
+
+    // ─── DRAWING FUNCTIONS ──────────────────────────────────
+    function drawSnake(segments, snakeData) {
+        if (segments.length === 0) return;
+
+        const headX = segments[0].x - camera.x;
+        const headY = segments[0].y - camera.y;
+        const radius = snakeData.r;
+        const color = snakeData.c;
+        const pattern = snakeData.pt;
+        const name = snakeData.n;
+        const isBoosting = snakeData.bo;
+        const powerBoost = snakeData.pb;
+        const invulnerable = snakeData.iv;
+        const isKing = snakeData.k;
+        const isMe = snakeData.me;
+        const angle = snakeData.a;
+
+        // Culling
+        const cullMargin = radius * segments.length * 0.5 + 100;
+        if (headX + cullMargin < 0 || headX - cullMargin > windowWidth ||
+            headY + cullMargin < 0 || headY - cullMargin > windowHeight) return;
+
+        if (invulnerable) ctx.globalAlpha = 0.5;
+
+        // Power boost aura
+        if (powerBoost) {
+            const pulse = 0.5 + Math.sin(Date.now() * 0.01) * 0.5;
+            ctx.shadowBlur = 20 + pulse * 20;
+            ctx.shadowColor = '#ff0000';
+            ctx.strokeStyle = `rgba(255, 0, 0, ${0.6 * pulse})`;
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.arc(headX, headY, radius * 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        const maxDraw = isMe ? segments.length : Math.min(MAX_RENDERED_SEGMENTS, segments.length);
+
+        // White outline
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = isBoosting ? radius * 2.4 : radius * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(segments[0].x - camera.x, segments[0].y - camera.y);
+        for (let i = 1; i < maxDraw; i++) ctx.lineTo(segments[i].x - camera.x, segments[i].y - camera.y);
+        ctx.stroke();
+
+        // Body with pattern
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (pattern === 'solid' || (!isMe && !powerBoost)) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = radius * 2;
+            ctx.beginPath();
+            ctx.moveTo(segments[0].x - camera.x, segments[0].y - camera.y);
+            for (let i = 1; i < maxDraw; i++) ctx.lineTo(segments[i].x - camera.x, segments[i].y - camera.y);
+            ctx.stroke();
+        } else if (pattern === 'striped') {
+            const step = 2;
+            for (let i = 0; i < maxDraw - step; i += step) {
+                ctx.strokeStyle = Math.floor(i / 4) % 2 === 0 ? color : lightenColor(color, 30);
+                ctx.lineWidth = radius * 2;
+                ctx.beginPath();
+                ctx.moveTo(segments[i].x - camera.x, segments[i].y - camera.y);
+                ctx.lineTo(segments[i + step].x - camera.x, segments[i + step].y - camera.y);
+                ctx.stroke();
+            }
+        } else if (pattern === 'spotted') {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = radius * 2;
+            ctx.beginPath();
+            ctx.moveTo(segments[0].x - camera.x, segments[0].y - camera.y);
+            for (let i = 1; i < maxDraw; i++) ctx.lineTo(segments[i].x - camera.x, segments[i].y - camera.y);
+            ctx.stroke();
+            ctx.fillStyle = darkenColor(color, 40);
+            for (let i = 0; i < maxDraw; i += 5) {
+                ctx.beginPath();
+                ctx.arc(segments[i].x - camera.x, segments[i].y - camera.y, radius * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else if (pattern === 'gradient') {
+            const light = lightenColor(color, 50);
+            const half = Math.floor(maxDraw / 2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = radius * 2;
+            ctx.beginPath();
+            ctx.moveTo(segments[0].x - camera.x, segments[0].y - camera.y);
+            for (let i = 1; i <= half; i++) ctx.lineTo(segments[i].x - camera.x, segments[i].y - camera.y);
+            ctx.stroke();
+            ctx.strokeStyle = light;
+            ctx.beginPath();
+            ctx.moveTo(segments[half].x - camera.x, segments[half].y - camera.y);
+            for (let i = half + 1; i < maxDraw; i++) ctx.lineTo(segments[i].x - camera.x, segments[i].y - camera.y);
+            ctx.stroke();
+        }
+
+        // Depth shadows
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        for (let i = 0; i < segments.length; i += 5) {
+            ctx.beginPath();
+            ctx.arc(segments[i].x - camera.x, segments[i].y - camera.y, radius * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.globalAlpha = 1.0;
+
+        // Eyes
+        const eyeDist = radius * 0.5;
+        const eyeSize = radius * 0.3;
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(headX + Math.cos(angle - 0.5) * eyeDist, headY + Math.sin(angle - 0.5) * eyeDist, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(headX + Math.cos(angle + 0.5) * eyeDist, headY + Math.sin(angle + 0.5) * eyeDist, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Name
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(name, headX, headY - radius - 15);
+
+        // King crown
+        if (isKing) {
+            const orbitR = radius * 1.5;
+            const orbitA = Date.now() * 0.003;
+            const crownX = headX + Math.cos(orbitA) * orbitR;
+            const crownY = headY + Math.sin(orbitA) * orbitR;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#fbbf24';
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.arc(crownX, crownY, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(crownX, crownY, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    function drawFood(foodArr) {
+        for (const f of foodArr) {
+            const x = f[0] - camera.x;
+            const y = f[1] - camera.y;
+            const r = f[2];
+            const colorIdx = f[3];
+            const isPremium = f[4];
+            if (x + 20 < 0 || x - 20 > windowWidth || y + 20 < 0 || y - 20 > windowHeight) continue;
+            if (isPremium) { ctx.shadowBlur = 15; ctx.shadowColor = COLORS[colorIdx]; }
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = COLORS[colorIdx] || '#ffffff';
+            ctx.fill();
+            ctx.closePath();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    function drawGrid() {
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        const step = 200;
+        const startX = Math.floor(camera.x / step) * step;
+        for (let x = startX; x < camera.x + windowWidth + step; x += step) {
+            ctx.beginPath();
+            ctx.moveTo(x - camera.x, 0);
+            ctx.lineTo(x - camera.x, windowHeight);
+            ctx.stroke();
+        }
+        const startY = Math.floor(camera.y / step) * step;
+        for (let y = startY; y < camera.y + windowHeight + step; y += step) {
+            ctx.beginPath();
+            ctx.moveTo(0, y - camera.y);
+            ctx.lineTo(windowWidth, y - camera.y);
+            ctx.stroke();
+        }
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 10;
+        ctx.strokeRect(-camera.x, -camera.y, WORLD_SIZE, WORLD_SIZE);
+    }
+
+    function drawKillNotifications(kn) {
+        if (!kn) return;
+        const now = Date.now();
+        for (const k of kn) {
+            const elapsed = now - k[3];
+            const duration = 2000;
+            if (elapsed >= duration) continue;
+            const progress = elapsed / duration;
+            const yOff = progress * 60;
+            const screenX = k[0] - camera.x;
+            const screenY = k[1] - camera.y - yOff;
+            const alpha = progress < 0.7 ? 1.0 : 1.0 - ((progress - 0.7) / 0.3);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#10b981';
+            ctx.fillStyle = '#10b981';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`+${k[2]}`, screenX, screenY);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.strokeText(`+${k[2]}`, screenX, screenY);
+            ctx.fillText(`+${k[2]}`, screenX, screenY);
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+    }
+
+    function drawMinimap() {
+        mctx.clearRect(0, 0, 150, 150);
+        const scale = 150 / WORLD_SIZE;
+        const now = Date.now();
+
+        for (const mm of minimapData) {
+            let col;
+            if (mm.c === 1) col = '#10b981';      // me
+            else if (mm.c === 2) col = '#fbbf24';  // king
+            else if (mm.c === 3) col = '#dc2626';  // power boost
+            else col = '#64748b';
+
+            if (mm.c === 3) {
+                const pulse = 0.5 + Math.sin(now * 0.01) * 0.5;
+                mctx.globalAlpha = 0.8 + pulse * 0.2;
+                mctx.shadowBlur = 5;
+                mctx.shadowColor = '#dc2626';
+            } else {
+                mctx.globalAlpha = (mm.c === 1 || mm.c === 2) ? 1.0 : 0.6;
+            }
+
+            mctx.strokeStyle = col;
+            mctx.lineWidth = Math.max(1, mm.r * scale * 0.8);
+            mctx.lineCap = 'round';
+            mctx.lineJoin = 'round';
+            mctx.beginPath();
+            mctx.moveTo(mm.p[0] * scale, mm.p[1] * scale);
+            for (let i = 2; i < mm.p.length; i += 2) {
+                mctx.lineTo(mm.p[i] * scale, mm.p[i + 1] * scale);
+            }
+            mctx.stroke();
+
+            const hSize = (mm.c === 1 || mm.c === 2) ? 2 : 1.5;
+            mctx.fillStyle = col;
+            mctx.globalAlpha = 1.0;
+            mctx.beginPath();
+            mctx.arc(mm.p[0] * scale, mm.p[1] * scale, hSize, 0, Math.PI * 2);
+            mctx.fill();
+            mctx.shadowBlur = 0;
+            mctx.globalAlpha = 1.0;
+        }
+
+        // Death locations
+        for (const dl of minimapDeathLocs) {
+            const elapsed = now - dl[2];
+            const dur = dl[3];
+            if (elapsed > dur) continue;
+            const alpha = 1 - elapsed / dur;
+            const pulse = 0.5 + Math.sin(now * 0.01) * 0.5;
+            mctx.globalAlpha = alpha * (0.6 + pulse * 0.4);
+            mctx.fillStyle = '#ef4444';
+            mctx.shadowBlur = 8;
+            mctx.shadowColor = '#ef4444';
+            mctx.beginPath();
+            mctx.arc(dl[0] * scale, dl[1] * scale, 4 + pulse * 2, 0, Math.PI * 2);
+            mctx.fill();
+            mctx.fillStyle = '#fef08a';
+            mctx.beginPath();
+            mctx.arc(dl[0] * scale, dl[1] * scale, 2, 0, Math.PI * 2);
+            mctx.fill();
+            mctx.shadowBlur = 0;
+            mctx.globalAlpha = 1.0;
+        }
+    }
+
+    function updateLeaderboard() {
+        leaderboardList.innerHTML = serverLeaderboard.map((entry, i) => {
+            const isMe = currState && currState.sn && currState.sn.find(s => s.me && s.n === entry[0]);
+            return `<div class="flex justify-between ${isMe ? 'text-green-400 font-bold' : ''}">
+                <span>${i + 1}. ${entry[0]}</span>
+                <span>${entry[1]}</span>
+            </div>`;
+        }).join('');
+        currentRankEl.innerText = serverRank;
+        totalSnakesEl.innerText = serverTotalCount;
+    }
+
+    // ─── GAME LOOP ──────────────────────────────────────────
+    function gameLoop() {
+        ctx.clearRect(0, 0, windowWidth, windowHeight);
+
+        if (isPlaying) sendInput();
+
+        if (currState && isPlaying) {
+            // Calculate interpolation factor
+            const elapsed = performance.now() - stateTimestamp;
+            const t = Math.min(elapsed / INTERP_DURATION, 1.5); // Allow slight extrapolation
+
+            // Build prev state lookup
+            const prevMap = {};
+            if (prevState && prevState.sn) {
+                for (const s of prevState.sn) prevMap[s.id] = s;
+            }
+
+            // Find my snake for camera
+            let mySnake = null;
+            for (const s of currState.sn) {
+                if (s.me) { mySnake = s; break; }
+            }
+
+            if (mySnake) {
+                const prevMe = prevMap[mySnake.id];
+                if (prevMe && prevMe.sg.length >= 2) {
+                    camera.x = lerp(prevMe.sg[0], mySnake.sg[0], t) - windowWidth / 2;
+                    camera.y = lerp(prevMe.sg[1], mySnake.sg[1], t) - windowHeight / 2;
+                } else {
+                    camera.x = mySnake.sg[0] - windowWidth / 2;
+                    camera.y = mySnake.sg[1] - windowHeight / 2;
+                }
+                scoreVal.innerText = mySnake.sc;
+                document.getElementById('timer-value').innerText = serverTimeToBoost;
+            }
+
+            drawGrid();
+
+            // Draw food
+            if (currState.fd) drawFood(currState.fd);
+
+            // Draw all snakes (me last for on-top rendering)
+            const snakesToDraw = [];
+            for (const s of currState.sn) {
+                const prev = prevMap[s.id];
+                const segments = getInterpolatedSegments(prev, s, t);
+                snakesToDraw.push({ segments, data: s });
+            }
+            // Draw non-me first, me last
+            for (const sd of snakesToDraw) {
+                if (!sd.data.me) drawSnake(sd.segments, sd.data);
+            }
+            for (const sd of snakesToDraw) {
+                if (sd.data.me) drawSnake(sd.segments, sd.data);
+            }
+
+            // Kill notifications
+            if (currState.kn) drawKillNotifications(currState.kn);
+
+            // Update HUD periodically
+            if (Date.now() % 100 < 20) {
+                updateLeaderboard();
+                drawMinimap();
+            }
+        } else {
+            // Not playing - just draw grid background
+            drawGrid();
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // ─── RESIZE ─────────────────────────────────────────────
+    function resize() {
+        windowWidth = window.innerWidth;
+        windowHeight = window.innerHeight;
+        canvas.width = windowWidth;
+        canvas.height = windowHeight;
+        // Notify server of viewport change
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ t: 'viewport', w: windowWidth, h: windowHeight }));
+        }
+    }
+
+    // ─── UI HANDLERS ────────────────────────────────────────
+    function startGame() {
+        if (!wsConnected) {
+            connStatus.className = 'conn-disconnected';
+            connStatus.textContent = 'Not connected to server!';
+            connStatus.style.opacity = '1';
+            return;
+        }
+
+        const name = playerNameInput.value || "Player";
+        const msg = {
+            t: mySnakeId === -1 || !isPlaying ? 'join' : 'respawn',
+            n: name,
+            c: selectedColor,
+            pt: selectedPattern,
+            b: startingBonus
+        };
+        ws.send(JSON.stringify(msg));
+
+        isPlaying = true;
+        menu.classList.add('hidden');
+        leaderboardEl.classList.remove('hidden');
+        scoreDisplay.classList.remove('hidden');
+        minimapContainer.classList.remove('hidden');
+        rankDisplay.classList.remove('hidden');
+        playerCountEl.classList.remove('hidden');
+    }
+
+    async function endGame(finalScore) {
+        const name = playerNameInput.value || "Player";
+        if (finalScore >= 10) {
+            await submitScore(name, finalScore);
+            showScoreSubmittedNotification(name, finalScore);
+        }
+        menu.classList.remove('hidden');
+        leaderboardEl.classList.add('hidden');
+        scoreDisplay.classList.add('hidden');
+        minimapContainer.classList.add('hidden');
+        rankDisplay.classList.add('hidden');
+        playerCountEl.classList.add('hidden');
+        mySnakeId = -1;
+        prevState = null;
+        currState = null;
+    }
+
+    // ─── FIREBASE LEADERBOARD ───────────────────────────────
+    async function submitScore(name, score) {
+        if (!name || score < 10) return;
+        try {
+            const ref = database.ref('leaderboard');
+            const snap = await ref.orderByChild('name').equalTo(name).once('value');
+            const data = snap.val();
+            if (data) {
+                const key = Object.keys(data)[0];
+                if (score > data[key].score) {
+                    await ref.child(key).update({ score, timestamp: Date.now() });
+                }
+            } else {
+                await ref.push({ name, score, timestamp: Date.now() });
+            }
+        } catch (e) { console.error('Score submit error:', e); }
+    }
+
+    async function loadGlobalLeaderboard() {
+        try {
+            const snap = await database.ref('leaderboard').orderByChild('score').limitToLast(100).once('value');
+            const data = snap.val();
+            if (!data) {
+                globalLeaderboardList.innerHTML = '<div class="text-center text-slate-400 py-8">No scores yet!</div>';
+                return;
+            }
+            const entries = Object.values(data).sort((a, b) => b.score - a.score).slice(0, 50);
+            const pName = playerNameInput.value || "Player";
+            globalLeaderboardList.innerHTML = entries.map((e, i) => {
+                const r = i + 1;
+                const rc = r === 1 ? 'rank-1' : r === 2 ? 'rank-2' : r === 3 ? 'rank-3' : 'rank-other';
+                const re = r === 1 ? '👑' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
+                const isMe = e.name === pName;
+                const hl = isMe ? 'background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981;' : '';
+                return `<div class="leaderboard-entry" style="${hl}">
+                    <div style="display: flex; align-items: center;">
+                        <div class="rank-badge ${rc}">${re || r}</div>
+                        <div>
+                            <div style="color: white; font-weight: bold; font-size: 16px;">${e.name} ${isMe ? '(You)' : ''}</div>
+                            <div style="color: #94a3b8; font-size: 12px;">${new Date(e.timestamp).toLocaleDateString()}</div>
+                        </div>
+                    </div>
+                    <div style="color: #10b981; font-weight: bold; font-size: 18px;">${Math.floor(e.score)}</div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            console.error('Leaderboard load error:', e);
+            globalLeaderboardList.innerHTML = '<div class="text-center text-red-400 py-8">Error loading leaderboard</div>';
+        }
+    }
+
+    function showLeaderboardPage() {
+        menu.classList.add('hidden');
+        leaderboardPage.classList.remove('hidden');
+        loadGlobalLeaderboard();
+        if (window.leaderboardInterval) clearInterval(window.leaderboardInterval);
+        window.leaderboardInterval = setInterval(() => {
+            if (!leaderboardPage.classList.contains('hidden')) loadGlobalLeaderboard();
+            else clearInterval(window.leaderboardInterval);
+        }, 5000);
+    }
+
+    function hideLeaderboardPage() {
+        leaderboardPage.classList.add('hidden');
+        menu.classList.remove('hidden');
+        if (window.leaderboardInterval) { clearInterval(window.leaderboardInterval); window.leaderboardInterval = null; }
+    }
+
+    // ─── NOTIFICATIONS ──────────────────────────────────────
+    function showPowerBoostNotification(name) {
+        const n = document.createElement('div');
+        n.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(220,38,38,0.95);color:white;padding:12px 30px;border-radius:10px;font-size:18px;font-weight:bold;z-index:1000;box-shadow:0 0 30px rgba(220,38,38,0.8);border:2px solid #fee2e2;pointer-events:none;';
+        n.textContent = `⚡ ${name} HAS RAMPAGE MODE! ⚡`;
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 3000);
+    }
+
+    function showScoreSubmittedNotification(name, score) {
+        const n = document.createElement('div');
+        n.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(16,185,129,0.95);color:white;padding:12px 30px;border-radius:10px;font-size:16px;font-weight:bold;z-index:1000;box-shadow:0 0 30px rgba(16,185,129,0.8);border:2px solid #d1fae5;pointer-events:none;';
+        n.textContent = `✅ Score ${score} submitted to global leaderboard!`;
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 3000);
+    }
+
+    // ─── INIT ───────────────────────────────────────────────
+    function init() {
+        let videoMaxTime = 0;
+
+        resize();
+        window.addEventListener('resize', resize);
+
+        // Mouse controls
+        window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+        window.addEventListener('mousedown', () => mouse.down = true);
+        window.addEventListener('mouseup', () => mouse.down = false);
+
+        // Touch controls
+        window.addEventListener('touchstart', e => {
+            const touch = e.touches[0];
+            mouse.x = touch.clientX;
+            mouse.y = touch.clientY;
+            const now = Date.now();
+            if (now - lastTapTime < DOUBLE_TAP_DELAY && now - lastTapTime > 0) mouse.down = true;
+            lastTapTime = now;
+        });
+        window.addEventListener('touchend', () => { mouse.down = false; });
+        window.addEventListener('touchmove', e => {
+            const touch = e.touches[0];
+            mouse.x = touch.clientX;
+            mouse.y = touch.clientY;
+        });
+
+        // Start buttons
+        startBtn.addEventListener('click', () => {
+            startingBonus = 0;
+            startGame();
+        });
+
+        const adVideos = [
+            'The LEGO Mandalorian.mp4',
+            'Merry Christmas you Sardine loving people _sardines _christmas _toystory.mp4',
+            'We raced all our toy cars to find the winner _christmas _carracing _shorts.mp4'
+        ];
+
+        startBigBtn.addEventListener('click', () => {
+            menu.classList.add('hidden');
+            adRewardModal.classList.remove('hidden');
+            claimRewardBtn.classList.add('hidden');
+            adTimer.textContent = 'Please watch the entire video...';
+            const randomVideo = adVideos[Math.floor(Math.random() * adVideos.length)];
+            adVideo.querySelector('source').src = randomVideo;
+            adVideo.load();
+            adVideo.currentTime = 0;
+            adVideo.play();
+            startAdTimer();
+        });
+
+        adVideo.addEventListener('contextmenu', e => e.preventDefault());
+        adVideo.addEventListener('seeking', () => {
+            if (adVideo.currentTime > videoMaxTime + 0.5) adVideo.currentTime = videoMaxTime;
+        });
+
+        viewLeaderboardBtn.addEventListener('click', showLeaderboardPage);
+        backToMenuBtn.addEventListener('click', hideLeaderboardPage);
+
+        claimRewardBtn.addEventListener('click', () => {
+            startingBonus = 500;
+            adWatched = true;
+            adRewardModal.classList.add('hidden');
+            startGame();
+        });
+
+        function startAdTimer() {
+            videoMaxTime = 0;
+            adVideo.addEventListener('timeupdate', function () {
+                if (adVideo.currentTime > videoMaxTime) videoMaxTime = adVideo.currentTime;
+                if (adVideo.currentTime > videoMaxTime + 0.5) adVideo.currentTime = videoMaxTime;
+                const rem = Math.ceil(adVideo.duration - adVideo.currentTime);
+                if (!isNaN(rem) && rem > 0) adTimer.textContent = `⏱️ ${rem} seconds remaining...`;
+            });
+            adVideo.addEventListener('ended', function () {
+                adTimer.textContent = '✅ Video complete! Claim your reward!';
+                claimRewardBtn.classList.remove('hidden');
+            });
+        }
+
+        // Color selection
+        document.querySelectorAll('.color-option').forEach(opt => {
+            opt.addEventListener('click', function () {
+                document.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
+                this.classList.add('active');
+                selectedColor = this.getAttribute('data-color');
+            });
+        });
+
+        // Pattern selection
+        document.getElementById('patternSelect').addEventListener('change', function () {
+            selectedPattern = this.value;
+        });
+
+        // Connect to server
+        connectWebSocket();
+
+        // Start render loop
+        requestAnimationFrame(gameLoop);
+    }
+
+    init();
+</script>
+</body>
+</html>

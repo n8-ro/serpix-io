@@ -1,0 +1,12 @@
+{
+  "name": "serpix-io",
+  "version": "1.0.0",
+  "description": "Serpix.io - Online Multiplayer Snake Game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
