@@ -444,11 +444,117 @@
     let minimapData = [];
     let minimapDeathLocs = [];
 
+    // ─── CLIENT-SIDE PREDICTION (like slither.io) ───────────
+    // Player snake runs locally at 60fps for instant response.
+    // Server state smoothly corrects the prediction.
+    let localSnake = null;  // { segments, angle, speed, radius, score, isBoosting }
+    const LOCAL_SPEED = 3;
+    const LOCAL_BOOST_SPEED = 6;
+    const CORRECTION_RATE = 0.15; // How fast to blend toward server position
+
+    function initLocalSnake(serverSn) {
+        const segs = [];
+        for (let i = 0; i < serverSn.sg.length; i += 2) {
+            segs.push({ x: serverSn.sg[i], y: serverSn.sg[i + 1] });
+        }
+        localSnake = {
+            segments: segs,
+            angle: serverSn.a,
+            speed: serverSn.bo ? LOCAL_BOOST_SPEED : LOCAL_SPEED,
+            radius: serverSn.r,
+            score: serverSn.sc,
+            isBoosting: serverSn.bo,
+            powerBoost: serverSn.pb,
+            color: serverSn.c,
+            pattern: serverSn.pt,
+            name: serverSn.n,
+            invulnerable: serverSn.iv,
+            isKing: serverSn.k
+        };
+    }
+
+    function updateLocalSnake() {
+        if (!localSnake || localSnake.segments.length === 0) return;
+
+        // Smooth turning toward mouse direction (instant feel)
+        const targetAngle = Math.atan2(mouse.y - windowHeight / 2, mouse.x - windowWidth / 2);
+        let diff = targetAngle - localSnake.angle;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        localSnake.angle += diff * 0.12; // Fast turning for responsiveness
+
+        localSnake.isBoosting = mouse.down;
+        localSnake.speed = mouse.down ? LOCAL_BOOST_SPEED : LOCAL_SPEED;
+
+        // Move head
+        const head = localSnake.segments[0];
+        const nx = head.x + Math.cos(localSnake.angle) * localSnake.speed;
+        const ny = head.y + Math.sin(localSnake.angle) * localSnake.speed;
+
+        // Clamp to world
+        const cx = Math.max(0, Math.min(WORLD_SIZE, nx));
+        const cy = Math.max(0, Math.min(WORLD_SIZE, ny));
+
+        localSnake.segments.unshift({ x: cx, y: cy });
+
+        // Insert mid-segment when boosting to prevent gaps
+        if (localSnake.isBoosting && localSnake.segments.length > 1) {
+            const prev = localSnake.segments[1];
+            localSnake.segments.splice(1, 0, { x: (cx + prev.x) / 2, y: (cy + prev.y) / 2 });
+        }
+
+        // Trim tail
+        const targetLen = 28 + localSnake.score / 2;
+        while (localSnake.segments.length > targetLen) localSnake.segments.pop();
+    }
+
+    function correctLocalSnake(serverSn) {
+        if (!localSnake) { initLocalSnake(serverSn); return; }
+
+        // Decode server segments
+        const serverSegs = [];
+        for (let i = 0; i < serverSn.sg.length; i += 2) {
+            serverSegs.push({ x: serverSn.sg[i], y: serverSn.sg[i + 1] });
+        }
+
+        // Update authoritative values from server
+        localSnake.score = serverSn.sc;
+        localSnake.radius = serverSn.r;
+        localSnake.powerBoost = serverSn.pb;
+        localSnake.invulnerable = serverSn.iv;
+        localSnake.isKing = serverSn.k;
+        localSnake.color = serverSn.c;
+        localSnake.name = serverSn.n;
+        localSnake.pattern = serverSn.pt;
+
+        // Smoothly correct segment positions toward server state
+        const len = Math.min(localSnake.segments.length, serverSegs.length);
+        for (let i = 0; i < len; i++) {
+            localSnake.segments[i].x += (serverSegs[i].x - localSnake.segments[i].x) * CORRECTION_RATE;
+            localSnake.segments[i].y += (serverSegs[i].y - localSnake.segments[i].y) * CORRECTION_RATE;
+        }
+
+        // If server has more segments, add them
+        for (let i = localSnake.segments.length; i < serverSegs.length; i++) {
+            localSnake.segments.push(serverSegs[i]);
+        }
+        // If local has too many, trim
+        while (localSnake.segments.length > serverSegs.length + 10) {
+            localSnake.segments.pop();
+        }
+
+        // Correct angle gently
+        let aDiff = serverSn.a - localSnake.angle;
+        while (aDiff < -Math.PI) aDiff += Math.PI * 2;
+        while (aDiff > Math.PI) aDiff -= Math.PI * 2;
+        localSnake.angle += aDiff * 0.1;
+    }
+
     // ─── WEBSOCKET ──────────────────────────────────────────
     let ws = null;
     let wsConnected = false;
     let reconnectTimer = null;
-    const INPUT_RATE = 30; // Send input 30 times per second
+    const INPUT_RATE = 60; // Send input 60 times per second for fast response
     let lastInputSend = 0;
 
     function getWsUrl() {
@@ -516,9 +622,15 @@
                 serverTimeToBoost = msg.tb || 0;
                 minimapData = msg.mm || [];
                 minimapDeathLocs = msg.dl || [];
+                // Client-side prediction: correct local snake toward server
+                if (msg.sn) {
+                    const mySn = msg.sn.find(s => s.me);
+                    if (mySn) correctLocalSnake(mySn);
+                }
                 break;
             case 'dead':
                 isPlaying = false;
+                localSnake = null;
                 endGame(msg.sc || 0);
                 break;
             case 'boost':
@@ -533,7 +645,8 @@
         if (now - lastInputSend < 1000 / INPUT_RATE) return;
         lastInputSend = now;
 
-        const angle = Math.atan2(mouse.y - windowHeight / 2, mouse.x - windowWidth / 2);
+        // Send the local predicted angle (what the player actually sees)
+        const angle = localSnake ? localSnake.angle : Math.atan2(mouse.y - windowHeight / 2, mouse.x - windowWidth / 2);
         ws.send(JSON.stringify({ t: 'input', a: Math.round(angle * 1000) / 1000, b: mouse.down ? 1 : 0 }));
     }
 
@@ -884,56 +997,59 @@
     function gameLoop() {
         ctx.clearRect(0, 0, windowWidth, windowHeight);
 
-        if (isPlaying) sendInput();
+        if (isPlaying) {
+            // 1. Run local prediction FIRST (instant response like slither.io)
+            updateLocalSnake();
+            sendInput();
+        }
 
         if (currState && isPlaying) {
-            // Calculate interpolation factor
+            // Calculate interpolation factor for OTHER snakes
             const elapsed = performance.now() - stateTimestamp;
-            const t = Math.min(elapsed / INTERP_DURATION, 1.5); // Allow slight extrapolation
+            const t = Math.min(elapsed / INTERP_DURATION, 1.5);
 
-            // Build prev state lookup
             const prevMap = {};
             if (prevState && prevState.sn) {
                 for (const s of prevState.sn) prevMap[s.id] = s;
             }
 
-            // Find my snake for camera
-            let mySnake = null;
-            for (const s of currState.sn) {
-                if (s.me) { mySnake = s; break; }
-            }
-
-            if (mySnake) {
-                const prevMe = prevMap[mySnake.id];
-                if (prevMe && prevMe.sg.length >= 2) {
-                    camera.x = lerp(prevMe.sg[0], mySnake.sg[0], t) - windowWidth / 2;
-                    camera.y = lerp(prevMe.sg[1], mySnake.sg[1], t) - windowHeight / 2;
-                } else {
-                    camera.x = mySnake.sg[0] - windowWidth / 2;
-                    camera.y = mySnake.sg[1] - windowHeight / 2;
-                }
-                scoreVal.innerText = mySnake.sc;
+            // 2. Camera follows LOCAL predicted position (zero latency!)
+            if (localSnake && localSnake.segments.length > 0) {
+                camera.x = localSnake.segments[0].x - windowWidth / 2;
+                camera.y = localSnake.segments[0].y - windowHeight / 2;
+                scoreVal.innerText = localSnake.score;
                 document.getElementById('timer-value').innerText = serverTimeToBoost;
             }
 
             drawGrid();
 
-            // Draw food
+            // 3. Draw food
             if (currState.fd) drawFood(currState.fd);
 
-            // Draw all snakes (me last for on-top rendering)
-            const snakesToDraw = [];
+            // 4. Draw OTHER snakes with interpolation
             for (const s of currState.sn) {
+                if (s.me) continue; // Skip me — drawn from local prediction
                 const prev = prevMap[s.id];
                 const segments = getInterpolatedSegments(prev, s, t);
-                snakesToDraw.push({ segments, data: s });
+                drawSnake(segments, s);
             }
-            // Draw non-me first, me last
-            for (const sd of snakesToDraw) {
-                if (!sd.data.me) drawSnake(sd.segments, sd.data);
-            }
-            for (const sd of snakesToDraw) {
-                if (sd.data.me) drawSnake(sd.segments, sd.data);
+
+            // 5. Draw MY snake from local prediction (on top of everything)
+            if (localSnake && localSnake.segments.length > 0) {
+                const myData = {
+                    n: localSnake.name,
+                    c: localSnake.color,
+                    pt: localSnake.pattern,
+                    r: localSnake.radius,
+                    a: localSnake.angle,
+                    bo: localSnake.isBoosting,
+                    pb: localSnake.powerBoost,
+                    iv: localSnake.invulnerable,
+                    k: localSnake.isKing,
+                    me: 1,
+                    sc: localSnake.score
+                };
+                drawSnake(localSnake.segments, myData);
             }
 
             // Kill notifications
@@ -945,7 +1061,6 @@
                 drawMinimap();
             }
         } else {
-            // Not playing - just draw grid background
             drawGrid();
         }
 
@@ -1007,6 +1122,7 @@
         mySnakeId = -1;
         prevState = null;
         currState = null;
+        localSnake = null;
     }
 
     // ─── FIREBASE LEADERBOARD ───────────────────────────────

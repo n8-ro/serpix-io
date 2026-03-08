@@ -493,11 +493,11 @@ class Snake {
                 }
             }
         } else {
-            // Player input: smooth turning toward target angle
+            // Player input: fast turning to match client prediction
             let diff = this.targetAngle - this.angle;
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
-            this.angle += diff * 0.06;
+            this.angle += diff * 0.15; // Fast to stay in sync with client prediction
         }
 
         this.performMovement();
